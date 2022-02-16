@@ -1,37 +1,23 @@
-## Welcome to GitHub Pages
+# Project 1 Write-Up
 
-You can use the [editor on GitHub](https://github.com/cal-cs184-student/sp22-project-webpages-CalArsen/edit/master/docs/index.md) to maintain and preview the content for your website in Markdown files.
+# **Overview**
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+Much of this first assignment was dedicated to the implementation of a rasterizer object, that kept track of multiple variables that affected the rendering quality of a given image in the svg format. This was done by rasterizing over every sample of every pixel on the screen of the application, and using buffers to keep track of what color each pixel would be. A lot of **task 1** was dedicated to this, rasterizing over a basic triangle shape to see whether pixels fit in the shape, and filling those pixels with some basic flat color. From there **task 2** would expand on this, requiring that multiple subdivided samples be taken per pixel on screen. In this task, the colors would have to be averaged over the samples based on which subdivisions were in the triangle. Another file that was edited was the transforms.cpp file, which needed to implement transform matrices for the triangle drawing. This was **task 3**. **Task 4** asked that barycentric coordinates be implemented; in the context of the task this was to rasterize an interpolated color triangle over not just spatial coordinates, but color coordinates as well. The only other files that were edited besides the rasterizer.cpp file, which kept the function implementations for different rasterizing methods, where the header files rasterizer.h and texture.h, as well as the texture.cpp file, for **task 5**, and **task 6**. While the header files were edited over minute details, like changes to functions' signatures, the texture.cpp file itself needed to implement different sampling methods for the texels of a given texture file, given that the parameters fed to the rasterizer had to be converted to uv coordinates in the texture space. This also used barycentric coordinate calculation done in a method in rasterizer.cpp, but then those uv coordinates were used to find a given color using the sample method from the texture.cpp file. The **former task** was just about implementing pixel sampling options, while the **latter** was about adding support for mipmaps, and level sampling methods. Other than that, some of the stuff that I learned about was things like casting object types, and using the & symbol in c++. I have very little experience with c++, so a lot of nuances that come with that language were very new to me in this assignment, and even had me lost at times. Although, I do hope I learned a good deal of how to handle the language moving forward. I also learned about the way the Vector2D struct was implemented, which was thankfully straightforward.
 
-### Markdown
+## **Task 1**
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+My first implementation of the rasterize_triangle method was very simple; it was two for loops over the x and y coords of the entire image size, with an if statement that checks whether each x and y combination fit inside of the triangle coordinates provided as parameters. I found out that there was already a function inside the triangulation.cpp folder that computes whether a point is mathematically inside a triangle, so I used that in the if statement after including the header triangulation.h (I also changed the file triangulation.h to support usage of the inside function). From there, I used the provided fill_pixel method in rasterizer.cpp to fill the color of that pixel if it passed the if statement. I added some more simple if statements that would check if an x value was outside of the triangle x values by a pixel distance of 1, and whether a y value was outside of the triangle y values by a pixel distance of 1. This simple trick optimized the runtime of the application well-enough, making it practically no worse than an algorithm that checks each sample within the bounding box of the triangle. At first my two for loops over x and y both started at 0.5, and iterated over 1 pixel each time, to sample points in the middle of each pixel, but that was eventually amended for task 2, where I needed to sample over more than one point per pixel. Here's a picture of it working as intended, with some aliasing highlighted in the zoom: ![Task1](./proj1/Write-Up Task1.PNG).
 
-```markdown
-Syntax highlighted code block
+The last thing I did was add support for triangles oriented in the clockwise direction, as I was getting errors where some triangles remained unfilled. I did this by just adding two checks using the inside functions that swapped two points of the triangle parameters.
 
-# Header 1
-## Header 2
-### Header 3
+## **Task 2**
 
-- Bulleted
-- List
+My subsequent implementations of rasterize_triangle expanded on the simplicity of my implementation from task 1. The first thing to note is that the sample buffer had to be changed. Originally, it was only created with enough space to hold every pixel's color information just once, so I added some code to the rasterize_triangle function and rasterize_point function to resize the sample buffer to hold every pixel times whatever the sample rate was. This would ensure that I could store the data on each pixel along with the data on each subdivided sample inside of each pixel, and what color that sample would be based on calculations. This would carry over to the other tasks as well. As mentioned earlier, this support was added to rasterize_point as well, except for that one it was to avoid erroneously supersampling lines and points. To support supersampling for the triangles, I added three variables: subpixel_index, sample_subdivision, and subdivision_increment. The purpose of the latter two variables was to divide each pixel into multiple samples that could be tested with the inside functions. This was accomplished with two more for loops inside the previous two for loops from task 1, where sample_subdivision marks where the first pixel sample is taken, and the subdivision_increment will iterate over more samples inside the same pixel, testing each time using inside(). ![Task2 Code](./proj1/Write-Up Task2a.PNG)
 
-1. Numbered
-2. List
+As shown in the code, these new for loops create values for subdivided fractions of a pixel that are then added to the original two for loop's x and y values, to properly test inside() on every pixel's samples, as many times as needed. The code above shows how those variables are calculated, which was part of the difficulty of this implementing this task. Lastly, that first variable, the subpixel_index, controls how those samples are stored in the sample buffer, so they can be averaged in the next step. The next step is simply resolving the sample buffer into the framebuffer, where every item in the sample buffer is averaged accordingly by each pixel, and input to the framebuffer. This process of taking multiple samples per pixel and averaging their colors is what makes supersampling a useful process. It allows the individual to provide a more accurate picture of to what extent each pixel is included in a given triangle. The more subdivided a pixel is the more one can ascertain, for instance, how opaque an edge should be, or where the color of a triangle should start to fade as it exceeds its boundary. This is where antialiasing occurs; because the jaggies and aliased pixels that were created initially by inaccurate calculations on only one sample point are given more sample points to pin point exactly how much of a pixel resides in a triangle at any given time. This is precisely why the following is observed for growing supersampling rates:
 
-**Bold** and _Italic_ and `Code` text
+![Sample Rate: 1](./proj1/Write-Up Task2b.PNG) ![Sample Rate: 4](./proj1/Write-Up Task2c.PNG) ![Sample Rate: 9](./proj1/Write-Up Task2d.PNG)
 
-[Link](url) and ![Image](src)
-```
+As one can tell, especially with the zoom, the aliasing on the sharp edge of the red triangle becomes much more faded as the supersampling rate goes up. This happens because of the aforementioned effect of multiple samples leading to more accurate recording of what sections of a pixel fall inside the drawn triangle. In the first image there are a few pixels that are completely uncolored, because their samples didn't fall under the triangle bounds. More color started to fill that gap as more samples that could fall under the bounds were introduced. Of course, some pixels that were colored more opaquely earlier also became more translucent as the sample rates increased, because some samples that were outside of the bounds denoted when pixels were not covered by the triangle as much as was previously calculated. This dual effect is the core of supersampling antialiasing in rasterization, that is useful in other areas.
 
-For more details see [Basic writing and formatting syntax](https://docs.github.com/en/github/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/cal-cs184-student/sp22-project-webpages-CalArsen/settings/pages). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://docs.github.com/categories/github-pages-basics/) or [contact support](https://support.github.com/contact) and we’ll help you sort it out.
+## **Task 3**
