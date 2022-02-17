@@ -67,7 +67,7 @@ For the deliverable, I decided to use a png of some wetlands I found online, mor
 
 [Link to Proj1 Github](https://github.com/cal-cs184-student/p1-rasterizer-sp22-CalArsen)
 
-[Link to Webpage](https://cal-cs184-student.github.io/sp22-project-webpages-CalArsen/)
+[Link to Webpage: https://cal-cs184-student.github.io/sp22-project-webpages-CalArsen/](https://cal-cs184-student.github.io/sp22-project-webpages-CalArsen/)
 
 [Link to Proj1 Write-Up](https://cal-cs184-student.github.io/sp22-project-webpages-CalArsen/proj1/index.html)
 
