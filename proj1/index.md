@@ -21,3 +21,54 @@ As shown in the code, these new for loops create values for subdivided fractions
 As one can tell, especially with the zoom, the aliasing on the sharp edge of the red triangle becomes much more faded as the supersampling rate goes up. This happens because of the aforementioned effect of multiple samples leading to more accurate recording of what sections of a pixel fall inside the drawn triangle. In the first image there are a few pixels that are completely uncolored, because their samples didn't fall under the triangle bounds. More color started to fill that gap as more samples that could fall under the bounds were introduced. Of course, some pixels that were colored more opaquely earlier also became more translucent as the sample rates increased, because some samples that were outside of the bounds denoted when pixels were not covered by the triangle as much as was previously calculated. This dual effect is the core of supersampling antialiasing in rasterization, that is useful in other areas.
 
 ## **Task 3**
+
+I changed my cubeman to wave at the viewer with their left hand, with their right hand relaxed to their side.
+
+![Waving Cubeman](./proj1/Write-Up Task3.PNG)
+
+Asides from editing the hexidecimal color values, I had to edit some of the transform calls in the code. I mainly edited the right hand to resemble the calls to the left and right legs, only changing the translation of one of the components to be further up and to the right. The left arm involved adding more statements, as I edited some of the translational transforms, and added some rotation transforms underneath to pose the arm in a wave. This had to be placed underneath the translation statements in the svg file, so that they would be calculated before the translation. This makes it easier to pose the components, as they are not displaced more across some farther away origin.
+
+## **Task 4**
+
+I implemented this task using the barycentric coordinate equations on the slides, with much of the same code from the previous tasks regarding the rasterization. Barycentric coordinates work in this context by taking a given triangle, attributing each vertex to some arbitrary color value, and when rasterizing a point, that point is interpolated linearly with respect to each color value vertex to obtain a new color value that smoothly transitions to that point from each vertex. That is to say, the proportional distances from a single vertex to the sample are computed for each vertex using these linear interpolation techniques, and those proportional distances are multiplied to each vertex and added up to get the color value at the gradient where the sample resides.
+
+![Example of Barycentric Coordinate Triangle](./proj1/Write-Up Task4a.PNG)
+
+After these calculations are done in my method implementation, that pixel sample's color is recorded in the sample buffer.
+
+![test7.svg Result](./proj1/Write-Up Task4b.PNG)
+
+## **Task 5**
+
+To understand pixel sampling, one must understand how uv mapping works. In the context of the rasterizer implementation here, the pixel coordinates that are sampled here are coordinates in the screen space, but the texture space is actually different from the screen space, so the screen coordinates need to take colors from the texture space at the correct positions to correctly map the entire texture onto the screen space. Where pixel sampling methods come in is in how we attribute the colors of a texel in the uv space to a pixel sample in the screen space, so it can be put in the framebuffer correctly. The nearest pixel sampling method simply rounds the uv coordinate to the nearest texel, and samples that color, while the bilinear pixel sampling methods estimates the color at that uv coordinate using the four nearest texels that surround the uv coordinate, and taking multiple linear interpolations to get the color gradient at where the uv coordinate is, similar to the barycentric coordinate calculations for triangles above, although not as complicated since here it is done with squares.
+
+![Nearest @ Rate 1](./proj1/Write-Up Task5a.PNG) ![Bilinear @ Rate 1](./proj1/Write-Up Task5b.PNG)
+![Nearest @ Rate 16](./proj1/Write-Up Task5c.PNG) ![Bilinear @ Rate 16](./proj1/Write-Up Task5d.PNG)
+
+The relative differences can be seen the most in the lettering of the logo, as they are more blocky and aliased in the nearest pixel sampling rates, but much smoother and rounded in the bilinear examples. It is harder to tell between the supersampled 16 rate pictures as the supersampling already antialiases the picture. While the nearest pixel sampling is probably returning somewhat inaccurate results, because the image is still averaged over multiple pixel samples back in the rasterizer, those inaccuracies go away a little, making it harder to discern any usefulness of bilinear pixel sampling in the case of something supersampled at a high rate.
+
+Large differences between the two methods typically arise when a given texture has strikingly different colors between each texel. This is because the nearest method will round to one of those colors, creating some mild aliasing effect in the process, while the bilinear method can find the approximate color that exists in between two or more texels, which leads to somewhat more accurate sampling.
+
+As a side note, this task and task 6 gave me the most trouble when coding, because I ran into a "vector subscript out of range" error frequently when trying to debug. With task 5 specifically, I ran into the error often when calling the get_texels method, and trying to access the texels[] structure; the only thing I could find was that sometimes the uv coordinates would be outside of the range [0, 1], and while I tried casting variables in both, the calculations for barycentric uv coordinates in rasterizer.cpp, and the scaling operations in texture.cpp, I could never fully guarantee a range of [0, 1], so I added a hard fix of if statements in the sample_nearest and sample_bilinear functions to catch uv coordinates that were outside that range and taper them to either 0 or 1.
+
+## **Task 6**
+
+Level sampling is a kind of resampling that involves downsampling the resolution of an image wherever aliasing can be avoided. Usually this is done for objects or textures that are supposed to be in the distance, but it can also be done for when pixels that are being uv mapped to a texture happen to be farther away from each other in the texture space. The idea is that these mipmaps start at level 0, or the full resolution, and gradually lower in resolution with each rising miplevel, until there is no more resolution, and everything is one color. To achieve this, I implemented calculations in the rasterize_textured_triangle function to get the uv coordinates of a sample of a pixel, as well as the uv coordinates of a neighboring sample one pixel in the x direction, and the coordinates of a neighboring sample one pixel in the y direction. These are passed to the sample function in texture.cpp, which immediately calls get_level, to get the appropriate mipmap level. That function works based on the lsm parameter, where the nearest and linear values for mipmap level D are calculated with math from the slides, and the vectors for the change in aforementioned uv coordinates. Once the level is obtained, the same functions that were passed in task 5, are passed again, with consideration for psm. The only difference is, if lsm is linear, then the D is continuous, meaning that multiple texel color samples need to be returned, with the weighted sum between them as the objective to return to the first rasterizing function.
+
+As another note, I was getting the same error as in task 5, about the subscript being out of range. This time it was related to the way I calculated D, which needed to be changed a few times. The change in particular was that the level D would, at times, be greater than the resolution could actually allow for, and when that would occur, I added a min() to cap the D at the highest level it could go to. There was also a minor error in lines 19-20 of texture.cpp, where the distances from continuous D to adjacent D's would both be zero if continuous D was an integer. If this happened, I would just set one of the distances equal to zero, as that made sense; it would just calculate the color now as though it were simply doing nearest level sampling.
+
+![lsm zero, psm nearest](./proj1/Write-Up Task6a.PNG) ![lsm zero, psm bilinear](./proj1/Write-Up Task6b.PNG)
+![lsm nearest, psm nearest](./proj1/Write-Up Task6c.PNG) ![lsm nearest, psm bilinear](./proj1/Write-Up Task6d.PNG)
+![lsm bilinear, psm nearest](./proj1/Write-Up Task6e.PNG) ![lsm bilinear, psm bilinear](./proj1/Write-Up Task6a.PNG)
+
+For the deliverable, I decided to use a png of some wetlands I found online, morphed to the uv map of test2.svg in texmap. The observable difference is that, psm on its own doesn't change image quality too drastically, but coupled with lsm, it can have a very good effect. In fact, lsm can still look aliased to some degree without psm, but antialiased and blurred with psm. This is a change observable in the zoom window as well, where the pixels blend together more as both psm and lsm are fine-tuned, especially with the last trilinear filtering option. The only tradeoff there is that the lsm methods are a bit slow, given how much memory they have to hold, and how the mipmap has to be resized constantly. This also affects memory usage consequently, making it less viable depending on what one would like to texture map. While the psm on its own does not have the best antialiasing power, it is much faster by comparison, and doesn't require additional memory allocation, so it can be seen as a more viable option, even if lsm methods can antialias better. That said my computer doesn't take much longer to compute lsm over psm, and it takes much longer just to compute supersampling, so lsm and psm might be more viable than that.
+
+# Miscellaneous
+
+[Link to Proj1 Github](https://github.com/cal-cs184-student/p1-rasterizer-sp22-CalArsen)
+
+[Link to Webpage](https://cal-cs184-student.github.io/sp22-project-webpages-CalArsen/)
+
+[Link to Proj1 Write-Up](https://cal-cs184-student.github.io/sp22-project-webpages-CalArsen/proj1/index.html)
+
+**Side Note** - The docs file includes the robot.svg I created, the Task4 svg I created for the explanation in Task 4, and the png svg I made for Task 6. All other images are contained directly in the proj1 folder.
